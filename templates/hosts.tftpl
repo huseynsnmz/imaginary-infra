@@ -1,0 +1,10 @@
+[all:vars]
+ansible_connection=ssh
+ansible_ssh_user=root
+ansible_python_interpreter=auto_silent
+
+[consulservers]
+%{ for specs in consulservers }${specs.hostname} ansible_host=${specs.publicip} privateip=${specs.privateip} zone=${specs.zone}
+%{ endfor }
+
+[patroni]

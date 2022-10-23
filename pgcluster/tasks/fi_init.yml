@@ -1,0 +1,14 @@
+---
+
+- name: install epel-release
+
+- name: install other packages
+  with_items:
+    - tmux
+    - net-tools
+    - perf
+    - btop
+    - mtr
+    - bash-completion
+    - sysstat
+    -

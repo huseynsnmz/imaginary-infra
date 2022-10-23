@@ -1,0 +1,6 @@
+.terraform/
+terraform.tfstate.d/
+scw-testing.tfvars
+notes
+.terraform.lock.hcl
+pgcluster/buffer/*
