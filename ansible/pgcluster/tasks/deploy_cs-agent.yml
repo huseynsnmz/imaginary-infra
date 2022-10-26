@@ -1,0 +1,89 @@
+---
+
+- name: Installing Hashicorp RPM repository [RHEL]
+  shell: yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
+
+- name: install packages
+  yum:
+    name: "{{ item }}"
+    state: installed
+  with_items:
+    - consul
+    - glibc-langpack-en
+    - jq
+
+- name: Get Consul bootstrap key from localhost variables
+  set_fact:
+    global_acl_token: "{{ lookup('file', 'buffer/' + zone + '-global_acl_token') }}"
+
+- name: Get Consul encrypt key from localhost variables
+  set_fact:
+    encrypt_key: "{{ lookup('file', 'buffer/' + zone + '-encrypt_key') }}"
+
+- name: create certs directory
+  file:
+    path: /etc/consul.d/certs
+    state: directory
+
+- name: get consul server ca
+  copy:
+    src: buffer/consul-agent-ca.pem
+    dest: /etc/consul.d/certs/consul-agent-ca.pem
+
+- name: Create Consul policies
+  block:
+    - name: Create policy directory
+      file:
+        path: /etc/consul.d/policies
+        state: directory
+
+    - name: Copy Consul agent policy to servers
+      template:
+        src: files/consul-agent-policy.hcl.j2
+        dest: /etc/consul.d/policies/consul-agent-policy.hcl
+
+
+- name: Create policy and set Consul token
+  block:
+    - name: Create the policy
+      shell: >
+        consul acl policy create
+        -name consul-client
+        -rules @consul-agent-policy.hcl
+        -token={{ global_acl_token }}
+        -http-addr="http://{{ hostvars[groups['consulservers'][0]]['privateip']}}:8500"
+      args:
+        chdir: /etc/consul.d/policies
+      run_once: yes
+
+    - name: Create Consul token from policy
+      shell: >
+        consul acl token create
+        -policy-name consul-client
+        -token {{ global_acl_token }}
+        -http-addr="http://{{ hostvars[groups['consulservers'][0]]['privateip']}}:8500"
+        -format=json | jq -r .SecretID
+      register: agent_acl_token
+
+- name: Copy Consul configuration to servers
+  template:
+    src: files/consul-agent.hcl.j2
+    dest: /etc/consul.d/consul.hcl
+
+- name: Set owner/group for Consul directory and files
+  file:
+    dest: /etc/consul.d
+    owner: consul
+    group: consul
+    recurse: yes
+
+- name: Start and enable Consul service
+  systemd:
+    name: consul
+    enabled: yes
+    state: started
+- name: Get members
+  shell: consul members -token={{ global_acl_token }}
+  register: members_result
+
+- debug: msg="{{ members_result.stdout }}"

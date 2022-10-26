@@ -1,0 +1,95 @@
+#jinja2: lstrip_blocks: True
+# -------------------------------------
+# Zalando Patroni Configuration
+# -------------------------------------
+
+namespace: patroni
+scope: pgcluster
+name: {{ ansible_hostname }}
+
+log:
+  dir: /var/log/patroni
+
+restapi:
+  listen: {{ privateip }}:8008
+  connect_address: {{ privateip }}:8008
+  authentication:
+    username: restusr
+    password: {{ patroni_restusr_pass }}
+  http_extra_headers:
+    'X-Frame-Options': 'SAMEORIGIN'
+    'X-XSS-Protection': '1; mode=block'
+    'X-Content-Type-Options': 'nosniff'
+
+consul:
+  host: 127.0.0.1:8500
+  register_service: true
+  token: "{{ patroni_acl_token.stdout }}"
+
+bootstrap:
+  dcs:
+    ttl: 670
+    loop_wait: 10
+    retry_timeout: 300
+    maximum_lag_on_failover: 5000000000
+    postgresql:
+      use_pg_rewind: true
+      parameters:
+        password_encryption: "scram-sha-256"
+        log_line_prefix: "< user=%u db=%d host=%h pid=%p app=%a time=%m > "
+        wal_level: "replica"
+        wal_sync_method: "fdatasync"
+        wal_compression: "on"
+        wal_log_hints: "on"
+        archive_mode: "on"
+        archive_command: "/bin/true"
+        shared_preload_libraries: 'pg_prewarm,pg_stat_statements,pg_wait_sampling,pg_stat_kcache'
+        superuser_reserved_connections: 10
+        max_connections: 300
+        log_checkpoints: "on"
+        log_lock_waits: "on"
+        log_temp_files: 0
+        log_autovacuum_min_duration: 0
+
+
+      pg_hba:
+      - local all all peer
+      - host all postgres 127.0.0.1/32 scram-sha-256
+{% for host in groups['patroniservers'] %}
+      - host all postgres {{ hostvars[host]['privateip'] }}/32 scram-sha-256
+{% endfor %}
+      - host replication repusr 127.0.0.1/32 scram-sha-256
+{% for host in groups['patroniservers'] %}
+      - host replication repusr {{ hostvars[host]['privateip'] }}/32 scram-sha-256
+{% endfor %}
+{% for host in groups['patroniservers'] %}
+      - host all rewusr {{ hostvars[host]['privateip'] }}/32 scram-sha-256
+{% endfor %}
+      - host all all {{ loadbalancerip }}/32 scram-sha-256
+
+  initdb:
+  - encoding: UTF8
+  - data-checksums
+
+postgresql:
+  listen: 0.0.0.0:5432
+  connect_address: {{ privateip }}:5432
+  data_dir: /var/lib/pgsql/14/data
+  config_dir: /var/lib/pgsql/14/data
+  pgpass: /var/lib/pgsql/.pgpass-patroni
+  bin_dir: /usr/pgsql-14/bin
+  authentication:
+    superuser:
+      username: postgres
+      password: {{ pg_postgres_pass }}
+    replication:
+      username: repusr
+      password: {{ pg_repusr_pass }}
+    rewind:
+      username: rewusr
+      password: {{ pg_rewusr_pass }}
+  parameters:
+    shared_buffers : '8MB'
+    work_mem: '4MB'
+    maintenance_work_mem: '64MB'
+    effective_cache_size: '4GB'

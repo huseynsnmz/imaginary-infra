@@ -1,0 +1,125 @@
+---
+
+- name: Installing PostgreSQL YUM repository [RHEL]
+  yum:
+    name: https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+    state: installed
+    disable_gpg_check: yes
+
+- name: install epel-release
+  yum:
+    name: epel-release
+    state: installed
+
+- name: Install packages
+  yum:
+    name: "{{ item }}"
+    state: installed
+  with_items:
+    - postgresql14-server
+    - postgresql14-contrib
+    - pg_stat_kcache_14
+    - pg_wait_sampling_14
+    - patroni
+    - patroni-consul
+    - glibc-langpack-en
+    - jq
+
+- name: get consul bootstrap key from localhost
+  set_fact:
+    global_acl_token: "{{ lookup('file', '../buffer/' + zone + '-global_acl_token') }}"
+
+- name: create directories
+  file:
+    path: "{{ item }}"
+    recurse: yes
+    owner: postgres
+    group: postgres
+  with_items:
+    - "/var/log/patroni"
+    - "/etc/patroni/callbacks"
+    - "/var/lib/pgsql/.config/patroni"
+
+- name: copy consul patroni policy
+  template:
+    src: ../files/patroni-policy.hcl.j2
+    dest: /etc/consul.d/policies/patroni-policy.hcl
+
+- name: create patroni policy
+  shell: consul acl policy create -name pgcluster-patroni -rules @patroni-policy.hcl -token={{ global_acl_token }}
+  args:
+    chdir: /etc/consul.d/policies
+  run_once: yes
+
+- name: create token from patroni policy
+  shell: consul acl token create -policy-name pgcluster-patroni -token={{ global_acl_token }} -format=json | jq -r .SecretID
+  register: patroni_acl_token
+
+- name: generate password for postgres user
+  shell: cat /dev/urandom | tr -dc A-Za-z0-9 | head -c 20
+  register: pg_postgres_pass_req
+  run_once: yes
+
+- name: generate password for repusr user
+  shell: cat /dev/urandom | tr -dc A-Za-z0-9 | head -c 20
+  register: pg_repusr_pass_req
+  run_once: yes
+
+- name: generate password for rewusr user
+  shell: cat /dev/urandom | tr -dc A-Za-z0-9 | head -c 20
+  register: pg_rewusr_pass_req
+  run_once: yes
+
+- name: generate password for restusr user
+  shell: cat /dev/urandom | tr -dc A-Za-z0-9 | head -c 20
+  register: patroni_restusr_pass_req
+  run_once: yes
+
+- name: register password for all users
+  set_fact:
+    pg_postgres_pass: "{{ pg_postgres_pass_req.stdout }}"
+    pg_repusr_pass: "{{ pg_repusr_pass_req.stdout }}"
+    pg_rewusr_pass: "{{ pg_rewusr_pass_req.stdout }}"
+    patroni_restusr_pass: "{{ patroni_restusr_pass_req.stdout }}"
+
+- name: render patroni config
+  template:
+    src: files/patroni.yml.j2
+    dest: /etc/patroni/patroni.yml
+
+- name: setup file permissions
+  file:
+    path: "{{ item }}"
+    owner: postgres
+    group: postgres
+  with_items:
+    - "/etc/patroni/patroni.yml"
+
+- name: set shortcut for patronictl
+  file:
+    src: /etc/patroni/patroni.yml
+    dest: /var/lib/pgsql/.config/patroni/patronictl.yaml
+    state: link
+    owner: postgres
+    group: postgres
+
+- name: start patroni
+  systemd:
+    name: patroni
+    state: started
+    enabled: yes
+
+- name: create extension if not exists with patronictl master if current node is master
+  shell: /bin/true
+  become: yes
+  become_user: postgres
+
+- name: get patronictl list output
+  shell: patronictl list
+  register: patronictl_output
+  become: yes
+  become_user: postgres
+  run_once: yes
+
+- debug: msg="{{ patronictl_output.stdout }}"
+

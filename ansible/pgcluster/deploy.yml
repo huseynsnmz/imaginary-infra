@@ -1,0 +1,14 @@
+- name: Deploy Consul servers
+  hosts: consulservers
+  become: yes
+  gather_facts: yes
+  tasks:
+    - import_tasks: tasks/fi_deploy_cs.yml
+
+- name: Deploy Patroni with Consul agents
+  hosts: patroniservers
+  become: yes
+  gather_facts: yes
+  tasks:
+    - import_tasks: tasks/deploy_cs-agent.yml
+    - import_tasks: tasks/deploy_patroni.yml
