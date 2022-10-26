@@ -1,6 +1,0 @@
-- name: Run playbook
-  hosts: all
-  become: yes
-  gather_facts: yes
-  tasks:
-    - import_tasks: tasks/fi_deploy_cs.yml
