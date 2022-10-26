@@ -3,8 +3,12 @@ ansible_connection=ssh
 ansible_ssh_user=root
 ansible_python_interpreter=auto_silent
 
+[patroniservers:vars]
+loadbalancerip=${pgcluster_lb}
+
 [consulservers]
 %{ for specs in consulservers }${specs.hostname} ansible_host=${specs.publicip} privateip=${specs.privateip} zone=${specs.zone}
 %{ endfor }
-
-[patroni]
+[patroniservers]
+%{ for specs in patroniservers }${specs.hostname} ansible_host=${specs.publicip} privateip=${specs.privateip} zone=${specs.zone}
+%{ endfor }

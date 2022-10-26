@@ -1,0 +1,29 @@
+consulservers = [
+%{ for index, specs in consulservers ~}
+    ("${specs.publicip}", {
+        "hostname": "${specs.hostname}",
+        "privateip": "${specs.privateip}",
+        "zone": "${specs.zone}",
+        "loadbalancerip": "${pgcluster_lb}"
+        }
+    %{ if index+1 == length(consulservers) ~}
+    )
+    %{ else ~}
+    ),
+    %{ endif ~}
+%{ endfor ~}]
+
+patroniservers = [
+%{ for index, specs in patroniservers ~}
+    ("${specs.publicip}", {
+        "hostname": "${specs.hostname}",
+        "privateip": "${specs.privateip}",
+        "zone": "${specs.zone}",
+        "loadbalancerip": "${pgcluster_lb}"
+        }
+    %{ if index+1 == length(patroniservers) ~}
+    )
+    %{ else ~}
+    ),
+    %{ endif ~}
+%{ endfor ~}]
