@@ -1,19 +1,18 @@
 ---
 
-- name: install epel-release
+- name: Install EPEL repository
   yum:
     name: epel-release
     state: installed
 
-- name: install other packages
+- name: Install other packages
   yum:
-    name: "{{ item }}"
+    name:
+      - tmux
+      - net-tools
+      - perf
+      - btop
+      - mtr
+      - bash-completion
+      - sysstat
     state: installed
-  with_items:
-    - tmux
-    - net-tools
-    - perf
-    - btop
-    - mtr
-    - bash-completion
-    - sysstat

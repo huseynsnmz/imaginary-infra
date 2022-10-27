@@ -1,11 +1,7 @@
 #jinja2: lstrip_blocks: True
-# -------------------------------------
-# Zalando Patroni Configuration
-# -------------------------------------
-
 namespace: patroni
 scope: pgcluster
-name: {{ ansible_hostname }}
+name: {{ inventory_hostname }}
 
 log:
   dir: /var/log/patroni

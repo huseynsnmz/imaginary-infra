@@ -1,29 +1,47 @@
 ---
 
-- name: Installing Hashicorp RPM repository [RHEL]
-  shell: yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
-
-- name: Installing EPEL repository
-  yum:
-    name: "epel-release"
-    state: installed
-
-- name: Install packages
-  yum:
-    name: "{{ item }}"
-    state: installed
-  with_items:
-    - consul
-    - glibc-langpack-en
-    - jq
-
-- name: Generate and register Consul encrypt key
+- name: Add required repositories and install packages
   block:
-    - name: Generate Consul encrypt key
+    - name: Installing Hashicorp RPM repository
+      shell: yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
+
+    - name: Installing EPEL RPM repository
+      yum:
+        name: "epel-release"
+        state: installed
+
+    - name: Install necessary packages
+      yum:
+        name:
+          - glibc-langpack-en
+          - consul
+          - jq
+        state: installed
+
+
+- name: Create certs and policies directory
+  file:
+    path: "{{ item }}"
+    state: directory
+  with_items:
+    - "/etc/consul.d/certs"
+    - "/etc/consul.d/policies"
+
+
+- name: Generate and save encrypt key for Consul
+  block:
+    - name: Generate encrypt key
       shell: consul keygen
       register: encrypt_key_req
 
-    - name: Register encrypt key for all hosts
+    - name: Save encrypt key to buffers
+      local_action:
+        module: copy
+        content: "{{ encrypt_key_req.stdout }}"
+        dest: buffer/{{ zone }}-encrypt_key
+      become: no
+
+    - name: Set encrypt_key as fact
       set_fact:
         encrypt_key: "{{ encrypt_key_req.stdout }}"
       delegate_to: "{{ item }}"
@@ -31,27 +49,20 @@
       with_items: "{{ groups['consulservers'] }}"
   when: inventory_hostname == groups['consulservers'][0]
 
-- name: Create a directory for certificates
-  file:
-    path: /etc/consul.d/certs
-    state: directory
 
-- name: Generate Consul certificates
+- name: Generate certificates for Consul and fetch them
   block:
-    - name: Generate CA certificate
+    - name: Generate CA certificate on certs directory
       shell: consul tls ca create
       args:
         chdir: /etc/consul.d/certs/
 
-    - name: Generate server certificates
+    - name: Generate server certificates on certs directory
       shell: consul tls cert create -server -dc {{ zone }}
       args:
         chdir: /etc/consul.d/certs/
-  when: inventory_hostname == groups['consulservers'][0]
 
-- name: Copy Consul certificates to other servers
-  block:
-    - name: Fetch certificates from server
+    - name: Fetch the certificates to buffer
       fetch:
         src: "/etc/consul.d/certs/{{ item }}"
         dest: buffer/
@@ -60,41 +71,33 @@
         - "consul-agent-ca.pem"
         - "{{ zone }}-server-consul-0.pem"
         - "{{ zone }}-server-consul-0-key.pem"
-      when: inventory_hostname == groups['consulservers'][0]
+  when: inventory_hostname == groups['consulservers'][0]
 
-    - name: Copy certificates to servers
-      copy:
-        src: "buffer/{{ item }}"
-        dest: /etc/consul.d/certs
-      with_items:
-        - "consul-agent-ca.pem"
-        - "{{ zone }}-server-consul-0.pem"
-        - "{{ zone }}-server-consul-0-key.pem"
-      when: inventory_hostname != groups['consulservers'][0]
 
-- name: Copy Consul configuration to servers
+- name: Copy certificates to servers
+  copy:
+    src: "buffer/{{ item }}"
+    dest: /etc/consul.d/certs
+  with_items:
+    - "consul-agent-ca.pem"
+    - "{{ zone }}-server-consul-0.pem"
+    - "{{ zone }}-server-consul-0-key.pem"
+  when: inventory_hostname != groups['consulservers'][0]
+
+
+- name: Render the configuration file and copy
   template:
     src: files/consul-server.hcl.j2
     dest: /etc/consul.d/consul.hcl
 
-- name: Create Consul policies
-  block:
-    - name: Create policy directory
-      file:
-        path: /etc/consul.d/policies
-        state: directory
 
-    - name: Copy Consul server policy to servers
-      template:
-        src: files/consul-server-policy.hcl.j2
-        dest: /etc/consul.d/policies/consul-{{ ansible_hostname }}-policy.hcl
-
-- name: Set owner/group for Consul directory and files
+- name: Set owner/group for directory and files
   file:
     dest: /etc/consul.d
     owner: consul
     group: consul
     recurse: yes
+
 
 - name: Start and enable Consul service
   systemd:
@@ -102,13 +105,21 @@
     enabled: yes
     state: started
 
-- name: Create and register ACL bootstrap token
+
+- name: Create and save ACL bootstrap token from Consul
   block:
     - name: Create ACL bootstrap token
       shell: consul acl bootstrap -format=json | jq -r .SecretID
       register: global_acl_token_req
 
-    - name: Register global ACL token for all hosts
+    - name: Save ACL bootstrap token to buffers
+      local_action:
+        module: copy
+        content: "{{ global_acl_token_req.stdout }}"
+        dest: buffer/{{ zone }}-global_acl_token
+      become: no
+
+    - name: Register ACL bootstrap token
       set_fact:
         global_acl_token: "{{ global_acl_token_req.stdout }}"
       delegate_to: "{{ item }}"
@@ -116,53 +127,55 @@
       with_items: "{{ groups['consulservers'] }}"
   when: inventory_hostname == groups['consulservers'][0]
 
-- name: Create policy and set Consul token
+- name: Create policy for server/client and set the generated token
   block:
-    - name: Create the policy
+    - name: Render ACL policy file for server and copy
+      template:
+        src: files/consul-server-policy.hcl.j2
+        dest: /etc/consul.d/policies/consul-{{ inventory_hostname }}-policy.hcl
+
+    - name: Render ACL policy file for client and copy
+      template:
+        src: files/consul-agent-policy.hcl.j2
+        dest: /etc/consul.d/policies/consul-agent-policy.hcl
+
+    - name: Create the required policy for server
       shell: >
         consul acl policy create
-        -name {{ ansible_hostname }}
-        -rules @consul-{{ ansible_hostname }}-policy.hcl
+        -name {{ inventory_hostname }}
+        -rules @consul-{{ inventory_hostname }}-policy.hcl
         -token={{ global_acl_token }}
       args:
         chdir: /etc/consul.d/policies
 
-    - name: Create Consul token from policy
+    - name: Create the required policy for client
+      shell: >
+        consul acl policy create
+        -name consul-client
+        -rules @consul-agent-policy.hcl
+        -token={{ global_acl_token }}
+      args:
+        chdir: /etc/consul.d/policies
+      when: inventory_hostname == groups['consulservers'][0]
+
+    - name: Create Consul token from server policy
       shell: >
         consul acl token create
-        -policy-name {{ ansible_hostname }}
+        -policy-name {{ inventory_hostname }}
         -token {{ global_acl_token }}
         -format=json | jq -r .SecretID
       register: server_acl_token
 
-    - name: Set Consul agent token
+    - name: Set Consul agent token for server
       shell: >
         consul acl set-agent-token
         -token={{ global_acl_token }}
         agent {{ server_acl_token.stdout }}
+
 
 - name: Get members
   shell: consul members -token={{ global_acl_token }}
   register: members_result
   run_once: yes
 
-- name: Save bootstrap token to buffers
-  local_action:
-    module: copy
-    content: "{{ global_acl_token }}"
-    dest: buffer/{{ zone }}-global_acl_token
-  run_once: yes
-  become: no
-
-- name: Save encrypt key to buffers
-  local_action:
-    module: copy
-    content: "{{ encrypt_key }}"
-    dest: buffer/{{ zone }}-encrypt_key
-  run_once: yes
-  become: no
-
-- debug: msg="{{ global_acl_token }}"
-
-- debug: msg="{{ members_result.stdout }}"
-
+- debug: msg="{{ members_result.stdout.split('\n') }}"
