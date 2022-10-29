@@ -50,6 +50,7 @@
         module: copy
         content: "{{ item.content }}"
         dest: buffer/{{ item.dest }}
+        mode: 0660
       become: no
       with_items:
         - { content: "{{ pg_postgres_pass_req.stdout }}", dest: "pgcluster-postgres_pass" }
@@ -91,6 +92,7 @@
       template:
         src: files/patroni-policy.hcl.j2
         dest: /etc/consul.d/policies/patroni-policy.hcl
+        mode: 0660
 
     - name: Create the policy for Patroni
       shell: >
@@ -111,6 +113,7 @@
   template:
     src: files/patroni.yml.j2
     dest: /etc/patroni/patroni.yml
+    mode: 0660
 
 
 - name: Set owner/group for directory and files

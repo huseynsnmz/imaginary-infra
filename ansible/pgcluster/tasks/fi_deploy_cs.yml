@@ -23,6 +23,7 @@
   file:
     path: "{{ item }}"
     state: directory
+    mode: 0770
   with_items:
     - "/etc/consul.d/certs"
     - "/etc/consul.d/policies"
@@ -39,6 +40,7 @@
         module: copy
         content: "{{ encrypt_key_req.stdout }}"
         dest: buffer/{{ zone }}-encrypt_key
+        mode: 0660
       become: no
 
     - name: Set encrypt_key as fact
@@ -78,6 +80,7 @@
   copy:
     src: "buffer/{{ item }}"
     dest: /etc/consul.d/certs
+    mode: 0660
   with_items:
     - "consul-agent-ca.pem"
     - "{{ zone }}-server-consul-0.pem"
@@ -89,6 +92,7 @@
   template:
     src: files/consul-server.hcl.j2
     dest: /etc/consul.d/consul.hcl
+    mode: 0660
 
 
 - name: Set owner/group for directory and files
@@ -117,6 +121,7 @@
         module: copy
         content: "{{ global_acl_token_req.stdout }}"
         dest: buffer/{{ zone }}-global_acl_token
+        mode: 0660
       become: no
 
     - name: Register ACL bootstrap token
@@ -133,11 +138,13 @@
       template:
         src: files/consul-server-policy.hcl.j2
         dest: /etc/consul.d/policies/consul-{{ inventory_hostname }}-policy.hcl
+        mode: 0660
 
     - name: Render ACL policy file for client and copy
       template:
         src: files/consul-agent-policy.hcl.j2
         dest: /etc/consul.d/policies/consul-agent-policy.hcl
+        mode: 0660
 
     - name: Create the required policy for server
       shell: >
