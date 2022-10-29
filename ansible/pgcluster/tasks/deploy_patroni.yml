@@ -154,5 +154,7 @@
   become_user: postgres
   run_once: yes
 
-- debug: msg="{{ patronictl_output.stdout.split('\n') }}"
+- name: Print patronictl list output as debug
+  debug:
+    msg: "{{ patronictl_output.stdout.split('\n') }}"
 

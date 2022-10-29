@@ -185,4 +185,6 @@
   register: members_result
   run_once: yes
 
-- debug: msg="{{ members_result.stdout.split('\n') }}"
+- name: Print consul members output as debug
+  debug:
+    msg: "{{ members_result.stdout.split('\n') }}"

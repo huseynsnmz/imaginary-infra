@@ -74,8 +74,11 @@
     state: started
 
 
-- name: Get members
+- name: Get Consul members
   shell: consul members -token={{ global_acl_token }}
   register: members_result
+  run_once: yes
 
-- debug: msg="{{ members_result.stdout.split('\n') }}"
+- name: Print consul members output as debug
+  debug:
+    msg: "{{ members_result.stdout.split('\n') }}"
