@@ -29,6 +29,7 @@
   file:
     path: "{{ item }}"
     state: directory
+    mode: 0770
   with_items:
     - "/etc/consul.d/certs"
     - "/etc/consul.d/policies"
@@ -38,6 +39,7 @@
   copy:
     src: buffer/consul-agent-ca.pem
     dest: /etc/consul.d/certs/consul-agent-ca.pem
+    mode: 0660
 
 
 - name: Create a token from the client policy
@@ -54,6 +56,7 @@
   template:
     src: files/consul-agent.hcl.j2
     dest: /etc/consul.d/consul.hcl
+    mode: 0660
 
 
 - name: Set owner/group for directory and files
