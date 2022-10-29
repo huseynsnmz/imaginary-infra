@@ -45,7 +45,7 @@
     consul acl token create
     -policy-name consul-client
     -token {{ global_acl_token }}
-    -http-addr="http://{{ hostvars[groups['consulservers'][0]]['privateip']}}:8500"
+    -http-addr="http://{{ hostvars[groups['consulservers'][0]]['privateip'] }}:8500"
     -format=json | jq -r .SecretID
   register: agent_acl_token
 
