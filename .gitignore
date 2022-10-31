@@ -4,3 +4,4 @@ scw-testing.tfvars
 notes
 .terraform.lock.hcl
 ansible/buffer/*
+ansible/hosts.ini
