@@ -3,18 +3,18 @@
 - name: Add PostgreSQL repository and install packages
   block:
     - name: Installing PostgreSQL YUM repository
-      yum:
+      ansible.builtin.yum:
         name: https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm
         state: installed
-        disable_gpg_check: yes
+        disable_gpg_check: true
 
     - name: Install EPEL repository
-      yum:
+      ansible.builtin.yum:
         name: epel-release
         state: installed
 
     - name: Install necessary packages
-      yum:
+      ansible.builtin.yum:
         name:
           - glibc-langpack-en
           - postgresql14-server
@@ -28,56 +28,56 @@
 
 
 - name: Generate passwords and write it to buffer
+  when: inventory_hostname == groups['patroniservers'][0]
   block:
     - name: Generate a password for PostgreSQL user 'postgres'
-      shell: cat /dev/urandom | tr -dc A-Za-z0-9 | head -c 20
+      ansible.builtin.shell: cat /dev/urandom | tr -dc A-Za-z0-9 | head -c 20
       register: pg_postgres_pass_req
 
     - name: Generate a password for PostgreSQL user 'repusr'
-      shell: cat /dev/urandom | tr -dc A-Za-z0-9 | head -c 20
+      ansible.builtin.shell: cat /dev/urandom | tr -dc A-Za-z0-9 | head -c 20
       register: pg_repusr_pass_req
 
     - name: Generate a password for PostgreSQL user 'rewusr'
-      shell: cat /dev/urandom | tr -dc A-Za-z0-9 | head -c 20
+      ansible.builtin.shell: cat /dev/urandom | tr -dc A-Za-z0-9 | head -c 20
       register: pg_rewusr_pass_req
 
     - name: Generate a password for Patroni user 'restusr'
-      shell: cat /dev/urandom | tr -dc A-Za-z0-9 | head -c 20
+      ansible.builtin.shell: cat /dev/urandom | tr -dc A-Za-z0-9 | head -c 20
       register: patroni_restusr_pass_req
 
     - name: Save generated passwords to buffers
-      copy:
+      ansible.builtin.copy:
         content: "{{ item.content }}"
         dest: buffer/{{ item.dest }}
         mode: 0660
-      become: no
+      become: false
       with_items:
         - { content: "{{ pg_postgres_pass_req.stdout }}", dest: "pgcluster-postgres_pass" }
         - { content: "{{ pg_repusr_pass_req.stdout }}", dest: "pgcluster-repusr_pass" }
         - { content: "{{ pg_rewusr_pass_req.stdout }}", dest: "pgcluster-rewusr_pass" }
         - { content: "{{ patroni_restusr_pass_req.stdout }}", dest: "pgcluster-restusr_pass" }
       delegate_to: localhost
-  when: inventory_hostname == groups['patroniservers'][0]
 
 
 - name: Gather all secrets
   block:
     - name: Register passwords as facts
-      set_fact:
+      ansible.builtin.set_fact:
         pg_postgres_pass: "{{ lookup('file', 'buffer/pgcluster-postgres_pass') }}"
         pg_repusr_pass: "{{ lookup('file', 'buffer/pgcluster-repusr_pass') }}"
         pg_rewusr_pass: "{{ lookup('file', 'buffer/pgcluster-rewusr_pass') }}"
         patroni_restusr_pass: "{{ lookup('file', 'buffer/pgcluster-restusr_pass') }}"
 
     - name: Get Consul bootstrap key from buffer
-      set_fact:
+      ansible.builtin.set_fact:
         global_acl_token: "{{ lookup('file', 'buffer/' + zone + '-global_acl_token') }}"
 
 
 - name: Create directories
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
-    recurse: yes
+    recurse: true
     owner: postgres
     group: postgres
   with_items:
@@ -89,13 +89,13 @@
 - name: Create ACL policy and token for configration on Consul
   block:
     - name: Copy Consul policy file for Patroni
-      template:
+      ansible.builtin.template:
         src: templates/patroni-policy.hcl.j2
         dest: /etc/consul.d/policies/patroni-policy.hcl
         mode: 0660
 
     - name: Create the policy for Patroni
-      shell: >
+      ansible.builtin.shell: >
         consul acl policy create
         -name pgcluster-patroni
         -rules @patroni-policy.hcl
@@ -105,19 +105,19 @@
       when: inventory_hostname == groups['patroniservers'][0]
 
     - name: Create ACL token for Patroni with the new policy
-      shell: consul acl token create -policy-name pgcluster-patroni -token={{ global_acl_token }} -format=json | jq -r .SecretID
+      ansible.builtin.shell: consul acl token create -policy-name pgcluster-patroni -token={{ global_acl_token }} -format=json | jq -r .SecretID
       register: patroni_acl_token
 
 
 - name: Render Patroni configuration file and copy
-  template:
+  ansible.builtin.template:
     src: templates/patroni.yml.j2
     dest: /etc/patroni/patroni.yml
     mode: 0660
 
 
 - name: Set owner/group for directory and files
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
     owner: postgres
     group: postgres
@@ -126,7 +126,7 @@
 
 
 - name: Set a shortcut for patronictl
-  file:
+  ansible.builtin.file:
     src: /etc/patroni/patroni.yml
     dest: /var/lib/pgsql/.config/patroni/patronictl.yaml
     state: link
@@ -135,26 +135,25 @@
 
 
 - name: Start 'patroni' service
-  systemd:
+  ansible.builtin.systemd:
     name: patroni
     state: started
-    enabled: yes
+    enabled: true
 
 
 - name: Create extension if not exists with patronictl master if current node is master
-  shell: /bin/true
-  become: yes
+  ansible.builtin.shell: /bin/true
+  become: true
   become_user: postgres
 
 
 - name: Get patronictl list output
-  shell: patronictl list
+  ansible.builtin.shell: patronictl list
   register: patronictl_output
-  become: yes
+  become: true
   become_user: postgres
-  run_once: yes
+  run_once: true
 
 - name: Print patronictl list output as debug
-  debug:
+  ansible.builtin.debug:
     msg: "{{ patronictl_output.stdout.split('\n') }}"
-

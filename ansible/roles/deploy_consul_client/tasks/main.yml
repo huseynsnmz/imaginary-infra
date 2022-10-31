@@ -3,30 +3,30 @@
 - name: Add Hashicorp repository and install packages
   block:
     - name: Installing Hashicorp RPM repository
-      shell: yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
+      ansible.builtin.shell: yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
 
     - name: Install necessary packages
-      yum:
+      ansible.builtin.yum:
         name:
-        - glibc-langpack-en
-        - consul
-        - jq
+          - glibc-langpack-en
+          - consul
+          - jq
         state: installed
 
 
 - name: Get required secrets from local buffers directory and set as fact
   block:
     - name: Get bootstrap key and set as fact
-      set_fact:
+      ansible.builtin.set_fact:
         global_acl_token: "{{ lookup('file', 'buffer/' + zone + '-global_acl_token') }}"
 
     - name: Get encrypt key and set as fact
-      set_fact:
+      ansible.builtin.set_fact:
         encrypt_key: "{{ lookup('file', 'buffer/' + zone + '-encrypt_key') }}"
 
 
 - name: Create certs and policies directory
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     mode: 0770
@@ -36,14 +36,14 @@
 
 
 - name: Copy CA certificate to certs directory
-  copy:
+  ansible.builtin.copy:
     src: buffer/consul-agent-ca.pem
     dest: /etc/consul.d/certs/consul-agent-ca.pem
     mode: 0660
 
 
 - name: Create a token from the client policy
-  shell: >
+  ansible.builtin.shell: >
     consul acl token create
     -policy-name consul-client
     -token {{ global_acl_token }}
@@ -53,32 +53,32 @@
 
 
 - name: Render configuration file and copy
-  template:
+  ansible.builtin.template:
     src: templates/consul-agent.hcl.j2
     dest: /etc/consul.d/consul.hcl
     mode: 0660
 
 
 - name: Set owner/group for directory and files
-  file:
+  ansible.builtin.file:
     dest: /etc/consul.d
     owner: consul
     group: consul
-    recurse: yes
+    recurse: true
 
 
 - name: Start and enable the systemd service
-  systemd:
+  ansible.builtin.systemd:
     name: consul
-    enabled: yes
+    enabled: true
     state: started
 
 
 - name: Get Consul members
-  shell: consul members -token={{ global_acl_token }}
+  ansible.builtin.shell: consul members -token={{ global_acl_token }}
   register: members_result
-  run_once: yes
+  run_once: true
 
 - name: Print consul members output as debug
-  debug:
+  ansible.builtin.debug:
     msg: "{{ members_result.stdout.split('\n') }}"

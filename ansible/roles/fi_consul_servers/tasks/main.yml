@@ -3,15 +3,15 @@
 - name: Add required repositories and install packages
   block:
     - name: Installing Hashicorp RPM repository
-      shell: yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
+      ansible.builtin.shell: yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
 
     - name: Installing EPEL RPM repository
-      yum:
+      ansible.builtin.yum:
         name: "epel-release"
         state: installed
 
     - name: Install necessary packages
-      yum:
+      ansible.builtin.yum:
         name:
           - glibc-langpack-en
           - consul
@@ -20,7 +20,7 @@
 
 
 - name: Create certs and policies directory
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     mode: 0770
@@ -30,54 +30,54 @@
 
 
 - name: Generate and save encrypt key for Consul
+  when: inventory_hostname == groups['consulservers'][0]
   block:
     - name: Generate encrypt key
-      shell: consul keygen
+      ansible.builtin.shell: consul keygen
       register: encrypt_key_req
 
     - name: Save encrypt key to buffers
-      copy:
+      ansible.builtin.copy:
         content: "{{ encrypt_key_req.stdout }}"
         dest: buffer/{{ zone }}-encrypt_key
         mode: 0660
-      become: no
+      become: false
       delegate_to: localhost
 
     - name: Set encrypt_key as fact
-      set_fact:
+      ansible.builtin.set_fact:
         encrypt_key: "{{ encrypt_key_req.stdout }}"
       delegate_to: "{{ item }}"
       delegate_facts: true
       with_items: "{{ groups['consulservers'] }}"
-  when: inventory_hostname == groups['consulservers'][0]
 
 
 - name: Generate certificates for Consul and fetch them
+  when: inventory_hostname == groups['consulservers'][0]
   block:
     - name: Generate CA certificate on certs directory
-      shell: consul tls ca create
+      ansible.builtin.shell: consul tls ca create
       args:
         chdir: /etc/consul.d/certs/
 
     - name: Generate server certificates on certs directory
-      shell: consul tls cert create -server -dc {{ zone }}
+      ansible.builtin.shell: consul tls cert create -server -dc {{ zone }}
       args:
         chdir: /etc/consul.d/certs/
 
     - name: Fetch the certificates to buffer
-      fetch:
+      ansible.builtin.fetch:
         src: "/etc/consul.d/certs/{{ item }}"
         dest: buffer/
-        flat: yes
+        flat: true
       with_items:
         - "consul-agent-ca.pem"
         - "{{ zone }}-server-consul-0.pem"
         - "{{ zone }}-server-consul-0-key.pem"
-  when: inventory_hostname == groups['consulservers'][0]
 
 
 - name: Copy certificates to servers
-  copy:
+  ansible.builtin.copy:
     src: "buffer/{{ item }}"
     dest: /etc/consul.d/certs
     mode: 0660
@@ -89,65 +89,66 @@
 
 
 - name: Render the configuration file and copy
-  template:
+  ansible.builtin.template:
     src: templates/consul-server.hcl.j2
     dest: /etc/consul.d/consul.hcl
     mode: 0660
 
 
 - name: Set owner/group for directory and files
-  file:
+  ansible.builtin.file:
     dest: /etc/consul.d
     owner: consul
     group: consul
-    recurse: yes
+    recurse: true
 
 
 - name: Start and enable Consul service
-  systemd:
+  ansible.builtin.systemd:
     name: consul
-    enabled: yes
+    enabled: true
     state: started
 
 
 - name: Create and save ACL bootstrap token from Consul
+  when: inventory_hostname == groups['consulservers'][0]
   block:
     - name: Create ACL bootstrap token
-      shell: consul acl bootstrap -format=json | jq -r .SecretID
+      ansible.builtin.shell: consul acl bootstrap -format=json | jq -r .SecretID
       register: global_acl_token_req
 
     - name: Save ACL bootstrap token to buffers
-      copy:
+      ansible.builtin.copy:
         content: "{{ global_acl_token_req.stdout }}"
         dest: buffer/{{ zone }}-global_acl_token
         mode: 0660
-      become: no
+      become: false
       delegate_to: localhost
 
     - name: Register ACL bootstrap token
-      set_fact:
+      ansible.builtin.set_fact:
         global_acl_token: "{{ global_acl_token_req.stdout }}"
       delegate_to: "{{ item }}"
       delegate_facts: true
       with_items: "{{ groups['consulservers'] }}"
-  when: inventory_hostname == groups['consulservers'][0]
+
 
 - name: Create policy for server/client and set the generated token
   block:
     - name: Render ACL policy file for server and copy
-      template:
+      ansible.builtin.template:
         src: templates/consul-server-policy.hcl.j2
         dest: /etc/consul.d/policies/consul-{{ inventory_hostname }}-policy.hcl
         mode: 0660
 
     - name: Render ACL policy file for client and copy
-      template:
+      ansible.builtin.template:
         src: templates/consul-client-policy.hcl.j2
         dest: /etc/consul.d/policies/consul-client-policy.hcl
         mode: 0660
 
     - name: Create the required policy for server
-      shell: >
+      ansible.builtin.shell: >
         consul acl policy create
         -name {{ inventory_hostname }}
         -rules @consul-{{ inventory_hostname }}-policy.hcl
@@ -156,7 +157,7 @@
         chdir: /etc/consul.d/policies
 
     - name: Create the required policy for client
-      shell: >
+      ansible.builtin.shell: >
         consul acl policy create
         -name consul-client
         -rules @consul-client-policy.hcl
@@ -166,7 +167,7 @@
       when: inventory_hostname == groups['consulservers'][0]
 
     - name: Create Consul token from server policy
-      shell: >
+      ansible.builtin.shell: >
         consul acl token create
         -policy-name {{ inventory_hostname }}
         -token {{ global_acl_token }}
@@ -174,17 +175,17 @@
       register: server_acl_token
 
     - name: Set Consul agent token for server
-      shell: >
+      ansible.builtin.shell: >
         consul acl set-agent-token
         -token={{ global_acl_token }}
         agent {{ server_acl_token.stdout }}
 
 
 - name: Get members
-  shell: consul members -token={{ global_acl_token }}
+  ansible.builtin.shell: consul members -token={{ global_acl_token }}
   register: members_result
-  run_once: yes
+  run_once: true
 
 - name: Print consul members output as debug
-  debug:
+  ansible.builtin.debug:
     msg: "{{ members_result.stdout.split('\n') }}"

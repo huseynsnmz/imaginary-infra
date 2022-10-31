@@ -1,8 +1,8 @@
 - name: Deploy Consul servers
   hosts: consulservers
   strategy: linear
-  become: yes
-  gather_facts: no
+  become: true
+  gather_facts: false
   roles:
     - fi_consul_servers
 
@@ -10,8 +10,8 @@
 - name: Deploy Patroni with Consul agents
   hosts: patroniservers
   strategy: linear
-  become: yes
-  gather_facts: no
+  become: true
+  gather_facts: false
   roles:
     - deploy_consul_client
     - deploy_patroni
