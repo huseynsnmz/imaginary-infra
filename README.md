@@ -8,6 +8,16 @@ This project is for fun so do not use it on productions directly. The goal is th
 * Some configurations cannot be set without estimating the workload and without having reasonable resource so some performans tweaks will not be considered in this.
 * I will add some configurations for easy tweaking. It may seem meaningless to set but it should gain a meaning in highloads or different systems.
 
+### Tools (Fedora 36)
+```
+python3 -m pip install --user pipx
+python3 -m pipx ensurepath
+dnf install dnf-plugins-core -y
+dnf config-manager --add-repo https://rpm.releases.hashicorp.com/fedora/hashicorp.repo
+dnf install terraform -y
+pipx install pre-commit ansible-lint
+```
+
 ### Create the infrastructure
 ```
 terraform init
