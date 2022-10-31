@@ -54,7 +54,7 @@
 
 - name: Render configuration file and copy
   ansible.builtin.template:
-    src: templates/consul-agent.hcl.j2
+    src: templates/consul-client.hcl.j2
     dest: /etc/consul.d/consul.hcl
     mode: 0660
 
