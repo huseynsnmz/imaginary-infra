@@ -36,12 +36,12 @@
       register: encrypt_key_req
 
     - name: Save encrypt key to buffers
-      local_action:
-        module: copy
+      copy:
         content: "{{ encrypt_key_req.stdout }}"
         dest: buffer/{{ zone }}-encrypt_key
         mode: 0660
       become: no
+      delegate_to: localhost
 
     - name: Set encrypt_key as fact
       set_fact:
@@ -90,7 +90,7 @@
 
 - name: Render the configuration file and copy
   template:
-    src: files/consul-server.hcl.j2
+    src: templates/consul-server.hcl.j2
     dest: /etc/consul.d/consul.hcl
     mode: 0660
 
@@ -117,12 +117,12 @@
       register: global_acl_token_req
 
     - name: Save ACL bootstrap token to buffers
-      local_action:
-        module: copy
+      copy:
         content: "{{ global_acl_token_req.stdout }}"
         dest: buffer/{{ zone }}-global_acl_token
         mode: 0660
       become: no
+      delegate_to: localhost
 
     - name: Register ACL bootstrap token
       set_fact:
@@ -136,14 +136,14 @@
   block:
     - name: Render ACL policy file for server and copy
       template:
-        src: files/consul-server-policy.hcl.j2
+        src: templates/consul-server-policy.hcl.j2
         dest: /etc/consul.d/policies/consul-{{ inventory_hostname }}-policy.hcl
         mode: 0660
 
     - name: Render ACL policy file for client and copy
       template:
-        src: files/consul-agent-policy.hcl.j2
-        dest: /etc/consul.d/policies/consul-agent-policy.hcl
+        src: templates/consul-client-policy.hcl.j2
+        dest: /etc/consul.d/policies/consul-client-policy.hcl
         mode: 0660
 
     - name: Create the required policy for server
@@ -159,7 +159,7 @@
       shell: >
         consul acl policy create
         -name consul-client
-        -rules @consul-agent-policy.hcl
+        -rules @consul-client-policy.hcl
         -token={{ global_acl_token }}
       args:
         chdir: /etc/consul.d/policies

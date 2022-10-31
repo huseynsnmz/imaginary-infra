@@ -1,8 +1,0 @@
-- name: Deploy Patroni with Consul agents
-  hosts: patroniservers
-  strategy: free
-  become: yes
-  gather_facts: yes
-  tasks:
-    - import_tasks: tasks/deploy_cs-agent.yml
-    - import_tasks: tasks/deploy_patroni.yml

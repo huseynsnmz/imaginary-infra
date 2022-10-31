@@ -1,6 +1,0 @@
-- name: Run playbook
-  hosts: patroniservers
-  become: yes
-  gather_facts: yes
-  tasks:
-    - import_tasks: tasks/deploy_cs-agent.yml

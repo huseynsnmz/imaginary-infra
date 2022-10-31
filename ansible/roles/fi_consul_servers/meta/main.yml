@@ -1,0 +1,15 @@
+galaxy_info:
+  author: Hüseyin Sönmez
+  description: This role is for installing high-available Consul cluster for the first time.
+  license: Apache-2.0
+
+  min_ansible_version: 2.12
+
+  platforms:
+  - name: EL
+    versions:
+    - 9
+
+  galaxy_tags: []
+
+dependencies: []
