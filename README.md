@@ -16,6 +16,7 @@ dnf install dnf-plugins-core -y
 dnf config-manager --add-repo https://rpm.releases.hashicorp.com/fedora/hashicorp.repo
 dnf install terraform -y
 pipx install ansible-lint
+ln -s ../../pre-commit.sh .git/hooks/pre-commit
 ```
 
 ### Create the infrastructure
