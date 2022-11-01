@@ -26,17 +26,17 @@ resource "local_file" "hosts_config" {
 }
 
 module "network" {
-    source = "../modules/network"
+  source = "../modules/network"
 }
 
 module "consul" {
-    source = "../modules/consul"
+  source = "../modules/consul"
 
-    sec_grp_id = module.network.pgcluster_sec_grp_id
+  sec_grp_id = module.network.pgcluster_sec_grp_id
 }
 
 module "patroni" {
-    source = "../modules/patroni"
+  source = "../modules/patroni"
 
-    sec_grp_id = module.network.pgcluster_sec_grp_id
+  sec_grp_id = module.network.pgcluster_sec_grp_id
 }
