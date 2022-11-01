@@ -1,7 +1,6 @@
-.terraform/
-terraform.tfstate.d/
-scw-testing.tfvars
-notes
-.terraform.lock.hcl
+prod/.terraform/
+prod/terraform.tfstate.d/
+prod/scw-testing.tfvars
+prod/.terraform.lock.hcl
 ansible/buffer/*
 ansible/hosts.ini
