@@ -15,14 +15,16 @@ python3 -m pipx ensurepath
 dnf install dnf-plugins-core -y
 dnf config-manager --add-repo https://rpm.releases.hashicorp.com/fedora/hashicorp.repo
 dnf install terraform -y
-pipx install pre-commit ansible-lint
+pipx install ansible-lint
 ```
 
 ### Create the infrastructure
 ```
+cd prod
 terraform init
-terraform apply -var-file="x.tfvars"
-ansible-run -i hosts.ini pgcluster/run.yml
+terraform workspace new scw-testing
+terraform apply -var-file="scw-testing.tfvars"
+ansible-run -i hosts.ini ../ansible/deploy.yml
 ```
 
 ### Some problems:
